@@ -53,12 +53,21 @@ A Next.js application for creating and participating in polls.
 - TypeScript
 - Tailwind CSS
 - Shadcn UI Components
+- Supabase (Authentication & Database)
+
+## Database Setup
+
+This project uses Supabase for authentication and database. Follow these steps to set up your database:
+
+1. Create a Supabase account and project at [supabase.com](https://supabase.com)
+2. Copy `.env.example` to `.env.local` and add your Supabase credentials
+3. Set up the database schema by following the instructions in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
+4. Apply the SQL migration to create the necessary tables by following the instructions in [SUPABASE_MIGRATION_GUIDE.md](./SUPABASE_MIGRATION_GUIDE.md)
 
 ## Future Enhancements
 
-- User authentication with NextAuth.js
-- Database integration (e.g., PostgreSQL, MongoDB)
 - Poll analytics and statistics
 - Social sharing features
 - Poll expiration settings
 - Custom poll themes
+- Email notifications for poll results

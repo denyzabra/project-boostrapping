@@ -39,25 +39,55 @@ export default function CreatePollPage() {
     );
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
     // Validate form
     if (!title.trim()) {
-      alert('Please enter a poll title');
+      setError('Please enter a poll title');
       return;
     }
     
-    if (options.filter(option => option.text.trim()).length < 2) {
-      alert('Please provide at least 2 options');
+    const validOptions = options.filter(option => option.text.trim());
+    if (validOptions.length < 2) {
+      setError('Please provide at least 2 options');
       return;
     }
 
-    // Create poll logic will be implemented here
-    console.log('Creating poll:', { title, description, options });
-    
-    // Redirect to polls page after creation
-    router.push('/polls');
+    try {
+      setIsSubmitting(true);
+      
+      // Send data to our API endpoint
+      const response = await fetch('/api/polls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+          options: validOptions.map(option => option.text.trim()),
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create poll');
+      }
+      
+      // Redirect to the newly created poll
+      router.push(`/polls/${data.pollId}`);
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while creating the poll');
+      console.error('Error creating poll:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -74,6 +104,11 @@ export default function CreatePollPage() {
           <CardDescription>
             Fill out the form below to create a new poll
           </CardDescription>
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm mt-4">
+              {error}
+            </div>
+          )}
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-6">
@@ -135,7 +170,13 @@ export default function CreatePollPage() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full">Create Poll</Button>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Creating Poll...' : 'Create Poll'}
+            </Button>
           </CardFooter>
         </form>
       </Card>

@@ -98,21 +98,15 @@ export default function PollDetailPage({ params }: { params: { id: string } }) {
             })}
           </div>
         </CardContent>
+        
         <CardFooter>
-          {!hasVoted ? (
-            <Button 
-              onClick={handleVote} 
-              disabled={!selectedOption}
-              className="w-full"
-            >
-              Vote
-            </Button>
-          ) : (
-            <div className="w-full text-center">
-              <p className="text-muted-foreground mb-2">Thank you for voting!</p>
-              <p className="text-sm">Total votes: {totalVotes}</p>
-            </div>
-          )}
+          <Button 
+            onClick={handleVote} 
+            disabled={isSubmitting || !selectedOption}
+            className="w-full"
+          >
+            {isSubmitting ? 'Submitting...' : userVoted ? 'Update Vote' : 'Submit Vote'}
+          </Button>
         </CardFooter>
       </Card>
     </div>
