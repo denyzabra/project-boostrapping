@@ -1,125 +1,61 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/client';
+import { NextRequest } from 'next/server';
+import { withAuth, withApiMiddleware, ApiContext } from '@/lib/api/middleware';
+import { createPollSchema, pollQuerySchema } from '@/lib/api/schemas/poll-schemas';
+import { validateBody, validateQuery } from '@/lib/api/validation';
+import { createSuccessResponse, ApiErrors } from '@/lib/api/response';
 
-export async function POST(request: NextRequest) {
-  const supabase = createServerSupabaseClient();
-  
-  // Get the current user session
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
+export const POST = withAuth(async (request: NextRequest, context: ApiContext) => {
+  // Validate request body
+  const validation = await validateBody(request, createPollSchema);
+  if (!validation.success) {
+    return validation.error;
   }
   
-  try {
-    const { title, description, options } = await request.json();
-    
-    // Validate input
-    if (!title || !options || !Array.isArray(options) || options.length < 2) {
-      return NextResponse.json(
-        { error: 'Invalid poll data. Title and at least 2 options are required.' },
-        { status: 400 }
-      );
-    }
-    
-    // Start a transaction
-    const { data: poll, error: pollError } = await supabase
-      .from('polls')
-      .insert({
-        title,
-        description,
-        created_by: session.user.id,
-      })
-      .select('id')
-      .single();
-    
-    if (pollError) {
-      console.error('Error creating poll:', pollError);
-      return NextResponse.json(
-        { error: 'Failed to create poll' },
-        { status: 500 }
-      );
-    }
-    
-    // Insert poll options
-    const pollOptions = options.map((option: string, index: number) => ({
-      poll_id: poll.id,
-      text: option,
-      position: index + 1,
-    }));
-    
-    const { error: optionsError } = await supabase
-      .from('poll_options')
-      .insert(pollOptions);
-    
-    if (optionsError) {
-      console.error('Error creating poll options:', optionsError);
-      return NextResponse.json(
-        { error: 'Failed to create poll options' },
-        { status: 500 }
-      );
-    }
-    
-    return NextResponse.json({
-      success: true,
+  const { title, description, options, isPublic = true } = validation.data;
+  
+  // Create poll with options
+  const pollRepo = context.repositories.getPollRepository();
+  const { poll, success } = await pollRepo.createWithOptions(
+    {
+      title,
+      description,
+      created_by: context.userId,
+      is_public: isPublic,
+    },
+    options
+  );
+  
+  if (!success || !poll) {
+    return ApiErrors.internalError('Failed to create poll');
+  }
+  
+  return createSuccessResponse(
+    {
       pollId: poll.id,
       message: 'Poll created successfully',
-    });
-  } catch (error) {
-    console.error('Error processing request:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
+    },
+    undefined,
+    201
+  );
+});
 
-export async function GET(request: NextRequest) {
-  const supabase = createServerSupabaseClient();
+export const GET = withApiMiddleware(async (request: NextRequest, context: ApiContext) => {
+  // Validate query parameters
   const url = new URL(request.url);
-  const userId = url.searchParams.get('userId');
-  
-  try {
-    let query = supabase
-      .from('polls')
-      .select(`
-        id,
-        title,
-        description,
-        created_at,
-        created_by,
-        poll_options (id, text)
-      `);
-    
-    // Filter by user if userId is provided
-    if (userId) {
-      query = query.eq('created_by', userId);
-    }
-    
-    // Only return public polls if not filtered by user
-    if (!userId) {
-      query = query.eq('is_public', true);
-    }
-    
-    const { data: polls, error } = await query.order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching polls:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch polls' },
-        { status: 500 }
-      );
-    }
-    
-    return NextResponse.json(polls);
-  } catch (error) {
-    console.error('Error processing request:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  const validation = validateQuery(url.searchParams, pollQuerySchema);
+  if (!validation.success) {
+    return validation.error;
   }
-}
+  
+  const { limit = 10, offset = 0, userId } = validation.data;
+  
+  // Get polls with options
+  const pollRepo = context.repositories.getPollRepository();
+  const polls = await pollRepo.findAllWithOptions({
+    limit,
+    offset,
+    filters: userId ? { created_by: userId } : { is_public: true },
+  });
+  
+  return createSuccessResponse({ polls });
+});
